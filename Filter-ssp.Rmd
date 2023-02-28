@@ -8,27 +8,27 @@ output: html_document
 This workflow follows the seurat qc-1 pipeline.
 
 The main steps are as follows:  
-* Read in Seurat Object from qc-1
-* Empty droplets
-* Ambient RNA content
-* Doublets
-* Statistical filtering using MADs
-* Novelty
-* Visualisation of QC metrics
-* Denoise PCA
-* Save SCE and Seurat Objects
-
-See /project/tendonhca/ccohen/git/achilles/docs/Filter-achilles.Rmd
+* Read in Seurat Object from qc-1  
+* Empty droplets  
+* Ambient RNA content  
+* Doublets  
+* Statistical filtering using MADs  
+* Novelty  
+* Visualisation of QC metrics  
+* Denoise PCA  
+* Save SCE and Seurat Objects  
+  
+See /project/tendonhca/ccohen/git/achilles/docs/Filter-achilles.md  
 
 
 
 
 ```{r setup, include=FALSE}
 #set default to not print code and alter figure dimensions
-knitr::opts_chunk$set(echo = FALSE, fig.width=10, fig.height=16)
+knitr::opts_chunk$set(echo = FALSE, fig.width=10, fig.height=20) 
 
 #set the directory for knitting
-knitr::opts_knit$set(root.dir ="/project/tendonhca/ccohen/chromium/analysis/20230118_achilles")
+knitr::opts_knit$set(root.dir ="/project/tendonhca/ccohen/chromium/analysis/20230201_ssp")
 
 
 library(tidyverse)
@@ -42,9 +42,9 @@ library(viridis)
 library(scuttle)
 library(scran)
 
-#Read in the metadata file
-metadata <- read.table("Files/metadata.txt", sep = "\t", header = TRUE)
 
+#Read in the metadata file
+metadata <- read.table("Files.dir/metadata.txt", sep = "\t", header = TRUE)
 ```
 
 
@@ -80,6 +80,53 @@ for (i in 1:length(file_list)){
 
 ```
 
+### Add patient metadata to sce_empty
+
+Read in patient metadata for each sample including the following fields 
+
+Patient metadata  
+- age  
+- sex  
+- ethnicity  
+- surgical procedure  
+- disease status  
+
+
+Tissue & processing metadata  
+- anatomical site
+- affected side  
+- microanatomical site  
+- time to freezing  
+- sequencing date
+
+
+
+```{r, echo=FALSE}
+
+
+for (i in 1:length(sce_empty)){
+    
+    sample_name <- str_sub(file_list[[i]], 1, 7)
+    
+    info <- metadata %>% filter(Patient == sample_name)
+
+    sce_empty[[i]]$patient <- info$Patient
+    sce_empty[[i]]$age <- info$Age
+    sce_empty[[i]]$sex <- info$Sex
+    sce_empty[[i]]$ethnicity <- info$Ethnicity
+    sce_empty[[i]]$surgical_procedure <- info$Surgical.procedure
+    sce_empty[[i]]$disease_status <- info$Disease.status
+    sce_empty[[i]]$anatomical_site <- info$Anatomical.site
+    sce_empty[[i]]$time_to_freezing <- info$Time.to.freezing
+    sce_empty[[i]]$sequencing_date <- info$Sequencing.date
+    sce_empty[[i]]$microanatomical_site <- str_extract(file_list[[i]], "-[:alpha:]+_") %>% 
+        str_replace("-", "") %>%
+        str_replace("_", "")
+    
+}
+
+
+```
 
 
 
@@ -89,7 +136,7 @@ for (i in 1:length(file_list)){
 What is the library profile of empty drops?
 
 
-```{r, warning=FALSE}
+```{r, warning=FALSE, fig.width=10, fig.height=28}
 
 project_title <- list()
 plot_list <- list()
@@ -104,7 +151,7 @@ for (i in 1:length(sce_empty)){
          empty_droplet = colData(sce[[i]])$empty_drops_FDR > 0.01)
      
     plot_list[[i]] <- ggplot(plot_data, aes(empty_droplet, library_size)) +
-         geom_jitter(width = 0.1, height = 0) +
+         geom_jitter(width = 0.1, height = 0, size = 0.1) +
          scale_y_continuous(trans = "log10") +
          cowplot::theme_cowplot()+
          ggtitle(project_title[[i]])
@@ -124,8 +171,8 @@ p
 dir.create ("Filtered_Figures.dir", showWarnings = FALSE)
 
 #save the plot
-ggsave("Filtered_Figures.dir/EmptyDrops_libsize.png", p, device = "png", width = 10, height = 12, bg = "white")
-ggsave("Filtered_Figures.dir/EmptyDrops_libsize.pdf", p, device = "pdf", width = 10, height = 12, bg = "white")
+ggsave("Filtered_Figures.dir/EmptyDrops_libsize.png", p, device = "png", width = 10, height = 28, bg = "white")
+ggsave("Filtered_Figures.dir/EmptyDrops_libsize.pdf", p, device = "pdf", width = 10, height = 28, bg = "white")
 ```
 
 What is the distribution of empty droplets by library size and number of features?
@@ -137,7 +184,7 @@ for (i in 1:length(sce_empty)){
     p <- colData(sce[[i]]) %>% 
         as.data.frame() %>%
         ggplot(aes(x=nCount_RNA, y=nFeature_RNA, color=empty_drop)) + 
-        geom_point() + 
+        geom_point(size = 0.2) + 
         scale_colour_viridis_d(begin = 0, end = 0.75)+
         stat_smooth(method=lm, colour = "black") +
         scale_x_log10() + 
@@ -163,15 +210,15 @@ p
 ```{r, include=FALSE}
 
 #save the plot
-ggsave("Filtered_Figures.dir/EmptyDrops_distribution.png", p, device = "png", width = 10, height = 12, bg = "white")
-ggsave("Filtered_Figures.dir/EmptyDrops_distribution.pdf", p, device = "pdf", width = 10, height = 12, bg = "white")
+ggsave("Filtered_Figures.dir/EmptyDrops_distribution.png", p, device = "png", width = 12, height = 16, bg = "white")
+ggsave("Filtered_Figures.dir/EmptyDrops_distribution.pdf", p, device = "pdf", width = 12, height = 16, bg = "white")
 ```
 
 
 
 How does removal of empty droplets alter library size?
 
-```{r}
+```{r, fig.height=24}
 
 
 #create a df of number of cells per sample
@@ -211,34 +258,66 @@ p
 
 ```{r, include=FALSE}
 #save the plot
-ggsave("Filtered_Figures.dir/EmptyDrops_cellnumber.png", p, device = "png", width = 10, height = 12, bg = "white")
-ggsave("Filtered_Figures.dir/EmptyDrops_cellnumber.pdf", p, device = "pdf", width = 10, height = 12, bg = "white")
+ggsave("Filtered_Figures.dir/EmptyDrops_cellnumber.png", p, device = "png", width = 10, height = 24, bg = "white")
+ggsave("Filtered_Figures.dir/EmptyDrops_cellnumber.pdf", p, device = "pdf", width = 10, height = 24, bg = "white")
 ```
 
 
 
 ### Remove some samples with too few cells
 
-OMB1284-Ach-MB and OMB1284-Ach-MTJ have very low cell numbers (58 and 164 respectively). 
+This step can be parameterised to go back in the pipeline. 
+
+Samples to remove for SSP:  
+
+Failed multiqc:  
+MSK1233-SSP-MB
+PRO0001-SSP-tearpartial
+PRO0002-SSP-tearpartial
+
+Failed QC metrics:  
+GLA001-SSP-tearfull
+MSK1246-SSP-tearfull
+
+Cells with too few counts after empty droplet removal:  
+GLA002-SSP-tearfull
 
 
 ```{r}
-cat("Files list before sample removal")
+
+#give the sce, sce_empty, and project_title lists some names
+
+names(sce) <- str_replace(file_list, "_empty_SingleCellExp.rds", "")
+names(sce_empty) <- str_replace(file_list, "_empty_SingleCellExp.rds", "")
+names(project_title) <- str_replace(file_list, "_empty_SingleCellExp.rds", "")
+
+cat("Sample list before sample removal")
 cat ("\n")
 
-file_list
+names(sce)
 
-sce <- sce[c(-10, -11)]
-sce_empty <- sce_empty[c(-10, -11)]
-file_list <-  file_list[c(-10, -11)]
-project_title <- project_title[c(-10, -11)]
+
+# create a vector of unwanted files (this could come from the yml file)
+files_to_remove <- c("PRO0001-SSP", "PRO0002-SSP", "GLA0001-SSP", "MSK1246-SSP", "GLA0002-SSP")
+
+# get the positions of unwanted files in the list
+positions <- match(files_to_remove, names(sce))
+
+# remove certain files using those names
+
+sce[positions] <- NULL
+sce_empty[positions] <- NULL
+project_title[positions] <- NULL
 
 cat ("\n")
-cat("Files list after sample removal")
+cat("Sample list after sample removal")
 cat ("\n")
-file_list
+names(sce)
 
 ```
+
+
+
 ### Ambient RNA
 
 Remove ambient RNA with decontX contamination score > 0.75 and save as new object. 
@@ -286,8 +365,8 @@ p
 
 ```{r, include=FALSE}
 #save the plot
-ggsave("Filtered_Figures.dir/Ambient_RNA.png", p, device = "png", width = 12, height = 24, bg = "white")
-ggsave("Filtered_Figures.dir/Ambient_RNA.pdf", p, device = "pdf", width = 12, height = 24, bg = "white")
+ggsave("Filtered_Figures.dir/Ambient_RNA.png", p, device = "png", width = 12, height = 28, bg = "white")
+ggsave("Filtered_Figures.dir/Ambient_RNA.pdf", p, device = "pdf", width = 12, height = 28, bg = "white")
 
 ```
 
@@ -308,7 +387,7 @@ for (i in 1:length(sce_empty)){
          )
      
      plot_list[[i]] <- ggplot(plot_data, aes(sce_doublet, library_size)) +
-            geom_jitter(width = 0.1, height = 0) +
+            geom_jitter(width = 0.1, height = 0, size = 0.1) +
             scale_y_continuous(trans = "log10") +
             cowplot::theme_cowplot()+
             ggtitle(project_title[[i]])+
@@ -435,6 +514,7 @@ for (i in 1:length(sce_empty)){
 }
 
 
+
 ```
 
 ### Visualise the outliers 
@@ -444,61 +524,63 @@ On the object with empty droplets removed:
 Plot the number of counts per cell (nCount_RNA) with low library size cells. 
 Plot the number of features per cell (nFeature_RNA) with low number of features. 
 Plot the mitochondrial content (percent_mt) with high percent mt. 
-Plot the number of counts vs number of features with recommended discarded cells.
 
-```{r, fig.width = 8, fig.height=48, message=FALSE, warning = FALSE}
-plot_list <- list()
+
+```{r, fig.width=12, fig.height=14, warning=FALSE}
+
+df <- list()
 
 for (i in 1:length(sce_empty)){
+    df[[i]] <- data.frame(
+        sce_empty[[i]]$orig.ident,
+        colnames(sce_empty[[i]]),
+        sce_empty[[i]]$nCount_RNA,
+        sce_empty[[i]]$nFeature_RNA,
+        sce_empty[[i]]$low_lib_size,
+        sce_empty[[i]]$low_n_features, 
+        sce_empty[[i]]$percent_mt,
+        sce_empty[[i]]$high_percent_mt
+    )
     
-    p1 <-ggplot(as.data.frame(colData(sce_empty[[i]])))+
-        geom_violin(aes(x = orig.ident, y = nCount_RNA))+
-        geom_point(aes(x = orig.ident, y = nCount_RNA, colour = low_lib_size),
-            position = position_jitter(seed = 1, width = 0.2),
-            alpha = 0.5)+
-        scale_y_log10()+
-        scale_colour_viridis_d(begin = 0, end = 0.75)+
-        theme_cowplot()
-    
-    p2 <-ggplot(as.data.frame(colData(sce_empty[[i]])))+
-        geom_violin(aes(x = orig.ident, y = nFeature_RNA))+
-        geom_point(aes(x = orig.ident, y = nFeature_RNA, colour = low_n_features),
-            position = position_jitter(seed = 1, width = 0.2),
-            alpha = 0.5)+
-        scale_y_log10()+
-        scale_colour_viridis_d(begin = 0, end = 0.75)+
-        theme_cowplot()
-    
-    p3 <-ggplot(as.data.frame(colData(sce_empty[[i]])))+
-        geom_violin(aes(x = orig.ident, y = percent_mt))+
-        geom_point(aes(x = orig.ident, y = percent_mt, colour = high_percent_mt),
-            position = position_jitter(seed = 1, width = 0.2),
-            alpha = 0.5)+
-        scale_y_log10()+
-        scale_colour_viridis_d(begin = 0, end = 0.75)+
-        theme_cowplot()
-
-    p4 <- colData(sce_empty[[i]]) %>% 
-        as.data.frame() %>%
-        ggplot(aes(x=nCount_RNA, y=nFeature_RNA, color=discard)) + 
-        geom_point() + 
-        scale_colour_viridis_d(begin = 0, end = 0.75)+
-        stat_smooth(method=lm, colour = "black") +
-        scale_x_log10() + 
-        scale_y_log10()+
-        theme_cowplot()
-    
-    p5 <- plot_grid(p1, p2, p3, p4, nrow = 2)
-    
-    title <- ggdraw() + draw_label(paste0(project_title[[i]], " empty drops removed"), fontface='bold', size = 16)
-    plot_list[[i]] <- plot_grid(title, p5, ncol=1, rel_heights=c(0.1, 1))
+    colnames(df[[i]]) <- c("orig.ident", "barcode", "nCount_RNA", "nFeature_RNA", "low_lib_size", "low_n_features", "percent_mt", "high_percent_mt")
 }
 
-   
+# make concatenated df
+
+df_all <- plyr::ldply(df)
+
+#plot low library size
+p1 <- ggplot(df_all, aes(x = orig.ident, y = nCount_RNA, fill = low_lib_size))+
+    geom_violin(trim = FALSE, width = 3, position = position_dodge(0))+
+    scale_y_log10() + 
+    scale_fill_viridis_d(begin = 0, end = 0.75)+
+    theme_cowplot()+
+    theme(axis.text.x = element_text(angle = 45, hjust=1))+
+    ggtitle("Statistical filtering: Low library size")
+    
+# plot low number of features
+p2 <- ggplot(df_all, aes(x = orig.ident, y = nFeature_RNA, fill = low_n_features))+
+    geom_violin(trim = FALSE, width = 2, position = position_dodge(0))+
+    scale_y_log10() + 
+    scale_fill_viridis_d(begin = 0, end = 0.75)+
+    theme_cowplot()+
+    theme(axis.text.x = element_text(angle = 45, hjust=1))+
+    ggtitle("Statistical filtering: Low number of features")
+
+# plot mitochondrial content
+
+p3 <- ggplot(df_all, aes(x = orig.ident, y = percent_mt, fill = high_percent_mt))+
+    geom_violin(trim = FALSE, width = 2, position = position_dodge(0))+
+    scale_fill_viridis_d(begin = 0, end = 0.75)+
+    theme_cowplot()+
+    theme(axis.text.x = element_text(angle = 45, hjust=1))+
+    ggtitle("Statistical filtering: Mitochondrial reads")
+
+
 #add an overall title and arrange the graphs on one page
-title <- ggdraw() + draw_label("Statistical outliers", fontface='bold', size = 24)
-p <- plot_grid(plotlist = plot_list, label_size = 24, ncol = 1)
-p <- plot_grid(title, p, ncol=1, rel_heights=c(0.05, 1))
+title <- ggdraw() + draw_label("Statistical filtering after empty droplet removal", fontface='bold', size = 24)
+p <- plot_grid(p1, p2, p3, ncol = 1)
+p <- plot_grid(title, p, ncol=1, rel_heights=c(0.1, 1))
 
 p
 
@@ -508,11 +590,46 @@ p
 
 ```{r, include=FALSE}
 #save the plot
-ggsave("Filtered_Figures.dir/Statistical_outliers.png", p, device = "png", width = 16, height = 30, bg = "white")
-ggsave("Filtered_Figures.dir/Statistical_outliers.pdf", p, device = "pdf", width = 16, height = 30, bg = "white")
+ggsave("Filtered_Figures.dir/Statistical_filtering.png", p, device = "png", width = 12, height = 14, bg = "white")
+ggsave("Filtered_Figures.dir/Statistical_filtering.pdf", p, device = "pdf", width = 12, height = 14, bg = "white")
 
 ```
 
+Plot the number of counts vs number of features with recommended discarded cells.
+
+```{r, fig.height=20, fig.width=14, message = FALSE}
+plot_list <- list()
+for (i in 1:length(sce_empty)){
+    plot_list[[i]] <- colData(sce_empty[[i]]) %>% 
+        as.data.frame() %>%
+        ggplot(aes(x=nCount_RNA, y=nFeature_RNA, color=discard)) + 
+        geom_point(size = 0.2) + 
+        scale_colour_viridis_d(begin = 0, end = 0.75)+
+        stat_smooth(method=lm, colour = "black") +
+        scale_x_log10() + 
+        scale_y_log10()+
+        theme_cowplot()+
+        ggtitle(project_title[[i]])
+    
+}
+
+
+#add an overall title and arrange the graphs on one page
+title <- ggdraw() + draw_label("Statistical outliers after empty droplet removal", fontface='bold', size = 24)
+p <- plot_grid(plotlist = plot_list, label_size = 24, ncol = 3)
+p <- plot_grid(title, p, ncol=1, rel_heights=c(0.05, 1))
+
+p
+
+```
+
+
+```{r, include=FALSE}
+#save the plot
+ggsave("Filtered_Figures.dir/Statistical_filtering.png", p, device = "png", width = 16, height = 30, bg = "white")
+ggsave("Filtered_Figures.dir/Statistical_filtering.pdf", p, device = "pdf", width = 16, height = 30, bg = "white")
+
+```
 
 
 On the object with ambient RNA and doublets removed:  
@@ -520,75 +637,114 @@ On the object with ambient RNA and doublets removed:
 Plot the number of counts per cell (nCount_RNA) with low library size cells. 
 Plot the number of features per cell (nFeature_RNA) with low number of features. 
 Plot the mitochondrial content (percent_mt) with high percent mt. 
-Plot the number of counts vs number of features with recommended discarded cells.
 
 
-```{r, fig.width = 14, fig.height=24, message=FALSE, warning = FALSE}
-plot_list <- list()
+```{r, fig.width=12, fig.height=14, warning = FALSE}
+
+df <- list()
 
 for (i in 1:length(sce_decontX_doublet_filtered)){
+    df[[i]] <- data.frame(
+        sce_decontX_doublet_filtered[[i]]$orig.ident,
+        colnames(sce_decontX_doublet_filtered[[i]]),
+        sce_decontX_doublet_filtered[[i]]$nCount_RNA,
+        sce_decontX_doublet_filtered[[i]]$nFeature_RNA,
+        sce_decontX_doublet_filtered[[i]]$low_lib_size,
+        sce_decontX_doublet_filtered[[i]]$low_n_features, 
+        sce_decontX_doublet_filtered[[i]]$percent_mt,
+        sce_decontX_doublet_filtered[[i]]$high_percent_mt
+    )
     
-    p1 <-ggplot(as.data.frame(colData(sce_decontX_doublet_filtered[[i]])))+
-        geom_violin(aes(x = orig.ident, y = nCount_RNA))+
-        geom_point(aes(x = orig.ident, y = nCount_RNA, colour = low_lib_size),
-            position = position_jitter(seed = 1, width = 0.2),
-            alpha = 0.5)+
-        scale_y_log10()+
-        scale_colour_viridis_d(begin = 0, end = 0.75)+
-        theme_cowplot()
-    
-    p2 <-ggplot(as.data.frame(colData(sce_decontX_doublet_filtered[[i]])))+
-        geom_violin(aes(x = orig.ident, y = nFeature_RNA))+
-        geom_point(aes(x = orig.ident, y = nFeature_RNA, colour = low_n_features),
-            position = position_jitter(seed = 1, width = 0.2),
-            alpha = 0.5)+
-        scale_y_log10()+
-        scale_colour_viridis_d(begin = 0, end = 0.75)+
-        theme_cowplot()
-    
-    p3 <-ggplot(as.data.frame(colData(sce_decontX_doublet_filtered[[i]])))+
-        geom_violin(aes(x = orig.ident, y = percent_mt))+
-        geom_point(aes(x = orig.ident, y = percent_mt, colour = high_percent_mt),
-            position = position_jitter(seed = 1, width = 0.2),
-            alpha = 0.5)+
-        scale_y_log10()+
-        scale_colour_viridis_d(begin = 0, end = 0.75)+
-        theme_cowplot()
-    
-    p4 <- colData(sce_decontX_doublet_filtered[[i]]) %>% 
-        as.data.frame() %>%
-        ggplot(aes(x=nCount_RNA, y=nFeature_RNA, color=discard)) + 
-        geom_point() + 
-        scale_colour_viridis_d(begin = 0, end = 0.75)+
-        stat_smooth(method=lm, colour = "black") +
-        scale_x_log10() + 
-        scale_y_log10()+
-        theme_cowplot()
-    
-    p5 <- plot_grid(p1, p2, p3, p4, nrow = 1)
-    title <- ggdraw() + draw_label(paste0(project_title[[i]], " ambient RNA and doublets removed"), fontface='bold', size = 16)
-    plot_list[[i]] <- plot_grid(title, p5, ncol=1, rel_heights=c(0.1, 1))
+    colnames(df[[i]]) <- c("orig.ident", "barcode", "nCount_RNA", "nFeature_RNA", "low_lib_size", "low_n_features", "percent_mt", "high_percent_mt")
 }
 
-   
+# make concatenated df
+
+df_all <- plyr::ldply(df)
+
+#plot low library size
+p1 <- ggplot(df_all, aes(x = orig.ident, y = nCount_RNA, fill = low_lib_size))+
+    geom_violin(trim = FALSE, width = 3, position = position_dodge(0))+
+    scale_y_log10() + 
+    scale_fill_viridis_d(begin = 0, end = 0.75)+
+    theme_cowplot()+
+    theme(axis.text.x = element_text(angle = 45, hjust=1))+
+    ggtitle("Statistical filtering: Low library size")
+    
+# plot low number of features
+p2 <- ggplot(df_all, aes(x = orig.ident, y = nFeature_RNA, fill = low_n_features))+
+    geom_violin(trim = FALSE, width = 2, position = position_dodge(0))+
+    scale_y_log10() + 
+    scale_fill_viridis_d(begin = 0, end = 0.75)+
+    theme_cowplot()+
+    theme(axis.text.x = element_text(angle = 45, hjust=1))+
+    ggtitle("Statistical filtering: Low number of features")
+
+# plot mitochondrial content
+
+p3 <- ggplot(df_all, aes(x = orig.ident, y = percent_mt, fill = high_percent_mt))+
+    geom_violin(trim = FALSE, width = 2, position = position_dodge(0))+
+    scale_fill_viridis_d(begin = 0, end = 0.75)+
+    theme_cowplot()+
+    theme(axis.text.x = element_text(angle = 45, hjust=1))+
+    ggtitle("Statistical filtering: Mitochondrial reads")
+
 
 #add an overall title and arrange the graphs on one page
-title <- ggdraw() + draw_label("Statistical outliers after ambient RNA and doublet removal", fontface='bold', size = 24)
-p <- plot_grid(plotlist = plot_list, label_size = 24, ncol = 1)
-p <- plot_grid(title, p, ncol=1, rel_heights=c(0.05, 1))
+title <- ggdraw() + draw_label("Statistical filtering after ambient RNA & doublet removal", fontface='bold', size = 16)
+p <- plot_grid(p1, p2, p3, ncol = 1)
+p <- plot_grid(title, p, ncol=1, rel_heights=c(0.1, 1))
 
 p
-
 
 ```
 
 
 ```{r, include=FALSE}
 #save the plot
-ggsave("Filtered_Figures.dir/Statistical_outliers_ambient_doublet.png", p, device = "png", width = 16, height = 30, bg = "white")
-ggsave("Filtered_Figures.dir/Statistical_outliers_ambient_doublet.pdf", p, device = "pdf", width = 16, height = 30, bg = "white")
+ggsave("Filtered_Figures.dir/Statistical_outliers_ambient_doublet.png", p, device = "png", width = 12, height = 14, bg = "white")
+ggsave("Filtered_Figures.dir/Statistical_outliers_ambient_doublet.pdf", p, device = "pdf", width = 12, height = 14, bg = "white")
 
 ```
+
+Plot the number of counts vs number of features with recommended discarded cells.
+
+```{r, fig.height=20, fig.width=14, message = FALSE}
+plot_list <- list()
+for (i in 1:length(sce_decontX_doublet_filtered)){
+    plot_list[[i]] <- colData(sce_decontX_doublet_filtered[[i]]) %>% 
+        as.data.frame() %>%
+        ggplot(aes(x=nCount_RNA, y=nFeature_RNA, color=discard)) + 
+        geom_point(size = 0.1) + 
+        scale_colour_viridis_d(begin = 0, end = 0.75)+
+        stat_smooth(method=lm, colour = "black") +
+        scale_x_log10() + 
+        scale_y_log10()+
+        theme_cowplot()+
+        ggtitle(project_title[[i]])
+        
+    
+}
+
+
+#add an overall title and arrange the graphs on one page
+title <- ggdraw() + draw_label("Statistical outliers after ambient RNA & doublet removal", fontface='bold', size = 24)
+p <- plot_grid(plotlist = plot_list, label_size = 24, ncol = 3)
+p <- plot_grid(title, p, ncol=1, rel_heights=c(0.05, 1))
+
+p
+
+```
+
+
+
+```{r, include=FALSE}
+#save the plot
+ggsave("Filtered_Figures.dir/Statistical_filtering_ambient_doublets_removed.png", p, device = "png", width = 16, height = 30, bg = "white")
+ggsave("Filtered_Figures.dir/Statistical_filtering_ambient_doublets_removed.pdf", p, device = "pdf", width = 16, height = 30, bg = "white")
+
+```
+
 
 
 ### Filtering 
@@ -608,14 +764,24 @@ sce_decontX_doublet_low_filtered <- list()
 
 for (i in 1:length(sce_decontX_doublet_filtered)){
     
+    # create the sce with discarded cells filtered out
     sce_decontX_doublet_discard_filtered[[i]] <- sce_decontX_doublet_filtered[[i]][, which(sce_decontX_doublet_filtered[[i]]$discard == FALSE)]
     
-    colData(sce_decontX_doublet_discard_filtered[[i]])[, c("low_lib_size", "low_n_features", "high_percent_mt", "discard")] <- NULL
-        
+    # remove columns from metadata
+    sce_decontX_doublet_discard_filtered[[i]]$low_lib_size <- NULL
+    sce_decontX_doublet_discard_filtered[[i]]$low_n_features <- NULL
+    sce_decontX_doublet_discard_filtered[[i]]$high_percent_mt <- NULL
+    sce_decontX_doublet_discard_filtered[[i]]$discard <- NULL
+    
+    # create the sce with low n features and low library size cells filtered out
     sce_decontX_doublet_low_filtered[[i]] <- sce_decontX_doublet_filtered[[i]][, which(sce_decontX_doublet_filtered[[i]]$low_n_features == FALSE &
                                               sce_decontX_doublet_filtered[[i]]$low_lib_size == FALSE)]
     
-    colData(sce_decontX_doublet_low_filtered[[i]])[, c("low_lib_size", "low_n_features", "high_percent_mt", "discard")] <- NULL
+    # remove columns from metadata
+    sce_decontX_doublet_low_filtered[[i]]$low_lib_size <- NULL
+    sce_decontX_doublet_low_filtered[[i]]$low_n_features <- NULL
+    sce_decontX_doublet_low_filtered[[i]]$high_percent_mt <- NULL
+    sce_decontX_doublet_low_filtered[[i]]$discard <- NULL
 
     
 }
@@ -766,40 +932,29 @@ total = Mean of total gene expression
 bio = Mean of gene expression from biological variance 
 tech = Mean of gene expression from technical variance
 
-```{r, echo = FALSE, fig.width = 8, fig.height=28}
+```{r}
 plot_list <-list()
 
 for (i in 1:length(sce_empty)){
-    p1 <- dec_empty[[i]] %>% 
-        as.data.frame() %>%
-        rownames_to_column() %>% 
-        dplyr::select(1:5)%>%
-        pivot_longer(3:5) %>%
-        ggplot(aes(x = mean, y = value, colour = name))+
-        geom_point()+
-        scale_colour_viridis_d()+
-        theme_cowplot()
     
-    p2 <- dec_empty[[i]] %>%
+    plot_list[[i]] <- dec_empty[[i]] %>%
         as_tibble() %>%
         mutate(
             gene_id = rownames(dec_empty[[i]]),
             hvg = gene_id %in% hvg_empty[[i]]
         ) %>%
         ggplot() +
-        geom_point(aes(mean, bio, color = hvg))+
+        geom_point(aes(mean, bio, color = hvg), size = 0.1)+
         theme_cowplot()+
-        scale_colour_viridis_d(begin = 0, end = 0.75)
+        scale_colour_viridis_d(begin = 0, end = 0.75)+
+        ggtitle(project_title[[i]])
 
-        p3 <- plot_grid(p1, p2, nrow = 1)
-    title <- ggdraw() + draw_label(project_title[[i]], fontface='bold', size = 16)
-    plot_list[[i]] <- plot_grid(title, p3, ncol=1, rel_heights=c(0.1, 1))
 }
 
 
 #add an overall title and arrange the graphs on one page
-title <- ggdraw() + draw_label("Highly Variable Genes", fontface='bold', size = 24)
-p <- plot_grid(plotlist = plot_list, label_size = 24, ncol = 1)
+title <- ggdraw() + draw_label("Highly Variable Genes afer empty droplets removal", fontface='bold', size = 24)
+p <- plot_grid(plotlist = plot_list, label_size = 24, ncol = 2)
 p <- plot_grid(title, p, ncol=1, rel_heights=c(0.05, 1))
 
 p
@@ -815,7 +970,7 @@ p
 ```{r, include=FALSE}
 #save the plot
 ggsave("Filtered_Figures.dir/Highly_variable_genes.png", p, device = "png", width = 12, height = 24, bg = "white")
-ggsave("Filtered_Figures.dir/Discard_cellnumber.pdf", p, device = "pdf", width = 12, height = 24, bg = "white")
+ggsave("Filtered_Figures.dir/Highly_variable_genes.pdf", p, device = "pdf", width = 12, height = 24, bg = "white")
 ```
 
 
@@ -894,7 +1049,7 @@ for(i in 1:length(sce_empty)){
 
 
 #add an overall title and arrange the graphs on one page
-title <- ggdraw() + draw_label("Doublets and Statistical outliers", fontface='bold', size = 24)
+title <- ggdraw() + draw_label("Doublets and Statistical outliers after empty droplet removal", fontface='bold', size = 24)
 p <- plot_grid(plotlist = plot_list, label_size = 24, ncol = 1)
 p <- plot_grid(title, p, ncol=1, rel_heights=c(0.05, 1))
 
@@ -960,49 +1115,36 @@ for (i in 1:length(sce_decontX_doublet_discard_filtered)){
     
 ```
 
-- Visualise the relation between the mean expression of each gene and the total / biological / technical variance of each gene.
+
 - Plot the highly variable genes
 
-```{r, fig.width = 8, fig.height=28}
+```{r}
 
 plot_list <-list()
 
 for (i in 1:length(sce_decontX_doublet_discard_filtered)){
     
-    p1 <- dec_empty[[i]] %>% 
-        as.data.frame() %>%
-        rownames_to_column() %>% 
-        dplyr::select(1:5)%>%
-        pivot_longer(3:5, values_to = "variation") %>%
-        ggplot(aes(x = mean, y = variation, colour = name))+
-        geom_point()+
-        scale_colour_viridis_d()+
-        theme_cowplot()
-    
-    p2 <- dec_filtered[[i]] %>%
+    plot_list[[i]] <- dec_filtered[[i]] %>%
         as_tibble() %>%
         mutate(
             gene_id = rownames(dec_filtered[[i]]),
             hvg = gene_id %in% hvg_filtered[[i]]
         ) %>%
         ggplot() +
-        geom_point(aes(mean, bio, color = hvg))+
+        geom_point(aes(mean, bio, color = hvg), size = 0.1)+
         theme_cowplot()+
-        scale_colour_viridis_d(begin = 0, end = 0.75)
+        scale_colour_viridis_d(begin = 0, end = 0.75)+
+        ggtitle(project_title[[i]])
 
-        p3 <- plot_grid(p1, p2, nrow = 1)
-    title <- ggdraw() + draw_label(project_title[[i]], fontface='bold', size = 16)
-    plot_list[[i]] <- plot_grid(title, p3, ncol=1, rel_heights=c(0.1, 1))
 }
 
 
 #add an overall title and arrange the graphs on one page
-title <- ggdraw() + draw_label("Highly Variable Genes (filtered)", fontface='bold', size = 24)
-p <- plot_grid(plotlist = plot_list, label_size = 24, ncol = 1)
+title <- ggdraw() + draw_label("Highly Variable Genes afer ambient RNA, doublets and outliers removal", fontface='bold', size = 24)
+p <- plot_grid(plotlist = plot_list, label_size = 24, ncol = 2)
 p <- plot_grid(title, p, ncol=1, rel_heights=c(0.05, 1))
 
 p
-    
 
     
 ```
@@ -1014,9 +1156,40 @@ ggsave("Filtered_Figures.dir/Highly_variable_genes_filtered.png", p, device = "p
 ggsave("Filtered_Figures.dir/Highly_variable_genes_filtered.pdf", p, device = "pdf", width = 12, height = 24, bg = "white")
 ```
 
+Plot UMAPs after ambient RNA, doublet and outlier removal
+
+
+```{r, warning=FALSE, message = FALSE}
+
+plot_list <- list()
+
+for(i in 1:length(sce_decontX_doublet_discard_filtered)){
+    
+    plot_list[[i]] <- plotReducedDim(sce_decontX_doublet_discard_filtered[[i]], dimred = "UMAP", colour_by = "orig.ident")+
+        scale_colour_viridis_d(begin = 0, end = 0.75)+
+        theme(legend.position="none")+
+        ggtitle(project_title[[i]])
+        
+}
+
+
+#add an overall title and arrange the graphs on one page
+title <- ggdraw() + draw_label("UMAP following ambient RNA, doublet and outlier removal", fontface='bold', size = 24)
+p <- plot_grid(plotlist = plot_list, label_size = 16, ncol = 3)
+p <- plot_grid(title, p, ncol=1, rel_heights=c(0.05, 1))
+
+p
+
+
+```
 
 
 
+```{r, include=FALSE}
+#save the plot
+ggsave("Filtered_Figures.dir/UMAP_after_filtering.png", p, device = "png", width = 12, height = 16, bg = "white")
+ggsave("Filtered_Figures.dir/UMAP_after_filtering.pdf", p, device = "pdf", width = 12, height = 16, bg = "white")
+```
 
 ### Save the RDS objects
 
@@ -1024,11 +1197,12 @@ For each level of filtering:
 Save as a SingleCellExperiment and save with suffix "_SingleCellExp.rds"
 Convert to a Seurat Object and save with suffix "_SeuratObject.rds".  
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 
 dir.create ("RDS_objects.dir/filtered")
 
 so <- list()
+so_mt <- list()
 
 for(i in 1:length(sce_empty)){
     
@@ -1051,11 +1225,16 @@ for(i in 1:length(sce_empty)){
             paste0("RDS_objects.dir/filtered/", project_title[[i]], "_decontX_doublet_discard_filtered_SingleCellExp.rds"))
     
     
-    # convert to Seurat Object and save (filtered only)
+    # convert to Seurat Object and save (filtered with and without mitochondrial reads)
     so[[i]] <- as.Seurat(sce_decontX_doublet_discard_filtered[[i]], 
                          project = project_title[[i]])
     saveRDS(so[[i]], 
             paste0("RDS_objects.dir/filtered/", project_title[[i]], "_decontX_doublet_discard_filtered_SeuratObject.rds"))
+    
+    so_mt[[i]] <- as.Seurat(sce_decontX_doublet_low_filtered[[i]], 
+                         project = project_title[[i]])
+    saveRDS(so_mt[[i]], 
+            paste0("RDS_objects.dir/filtered/", project_title[[i]], "_decontX_doublet_low_filtered_SeuratObject.rds"))
 
 }
 
